@@ -2,16 +2,53 @@
 AI舆情分析日报系统 - FastAPI 接口
 """
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from src.config import DATA_DIR, NEWS_LIMIT, OPENAI_API_KEY, OPENAI_MODEL
+from src.db import get_upload_record, init_db, insert_upload_record
+from src.services.daily_report_generator import generate_daily_report, get_latest_report
+from src.services.report_generator import generate_reports
 
 app = FastAPI(title="AI舆情分析日报系统", version="0.1.0")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """服务启动时初始化 SQLite 数据库。"""
+    init_db()
+
+
+@app.get("/api/daily-report")
+async def daily_report(date: str | None = None, force: bool = False):
+    """获取或生成 AI 领域日报。"""
+    try:
+        return generate_daily_report(date_str=date, force=force)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("日报生成失败: %s", e)
+        raise HTTPException(status_code=500, detail="日报生成失败")
+
+
+@app.post("/api/daily-report/generate")
+async def generate_daily_report_endpoint(date: str | None = None, force: bool = True):
+    """强制重新生成 AI 领域日报。"""
+    try:
+        return generate_daily_report(date_str=date, force=force)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("日报生成失败: %s", e)
+        raise HTTPException(status_code=500, detail="日报生成失败")
 
 
 class HealthResponse(BaseModel):
@@ -150,8 +187,10 @@ def save_and_analyze_article(
     published_at: str,
     url: str,
     language: str,
+    upload_type: str,
+    pdf_pages: int | None = None,
 ) -> dict[str, Any]:
-    """保存文章并调用 AI 进行结构化分析。"""
+    """保存文章、调用 AI 进行结构化分析、生成报告并写入数据库。"""
     from src.services.news_extractor import extract_structured_news, get_extractor_client
 
     client = get_extractor_client()
@@ -188,6 +227,29 @@ def save_and_analyze_article(
     write_json_file(DATA_DIR / "structured_news.json", structured_news)
     append_jsonl_file(DATA_DIR / "structured_news.jsonl", structured)
 
+    # 生成 AI 分析报告 PDF 和结构化分析报告 PDF
+    report_pdf_path, structured_pdf_path = generate_reports(structured)
+    if report_pdf_path:
+        structured["report_pdf_path"] = report_pdf_path
+    if structured_pdf_path:
+        structured["structured_pdf_path"] = structured_pdf_path
+
+    # 写入 SQLite 数据库
+    insert_upload_record(
+        record_id=news_id,
+        upload_type=upload_type,
+        title=new_record["title"],
+        source=new_record["source"],
+        url=new_record["url"],
+        language=new_record["language"],
+        published_at=published_at,
+        content=new_record["content"],
+        structured=structured,
+        report_pdf_path=report_pdf_path,
+        structured_pdf_path=structured_pdf_path,
+        pdf_pages=pdf_pages,
+    )
+
     return structured
 
 
@@ -206,6 +268,7 @@ async def upload_news(request: UploadNewsRequest):
         published_at=request.published_at,
         url=request.url,
         language=request.language,
+        upload_type="manual",
     )
 
     return UploadNewsResponse(
@@ -253,6 +316,8 @@ async def upload_pdf(
         published_at=published_at,
         url=url,
         language=language,
+        upload_type="pdf",
+        pdf_pages=extract_result.get("pages"),
     )
 
     return UploadNewsResponse(
@@ -296,6 +361,7 @@ async def fetch_url(request: FetchUrlRequest):
         published_at=published_at,
         url=request.url,
         language=request.language,
+        upload_type="url",
     )
 
     return UploadNewsResponse(
@@ -303,4 +369,62 @@ async def fetch_url(request: FetchUrlRequest):
         id=structured["id"],
         message="网页抓取并成功完成 AI 结构化分析",
         structured=structured,
+    )
+
+
+@app.get("/api/reports/{record_id}/analysis")
+async def download_analysis_report(record_id: str):
+    """下载 AI 分析报告 PDF。"""
+    record = get_upload_record(record_id)
+    if not record or not record.get("report_pdf_path"):
+        raise HTTPException(status_code=404, detail="报告不存在")
+
+    pdf_path = Path(record["report_pdf_path"])
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="报告文件已丢失")
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=f"{record_id}_analysis_report.pdf",
+    )
+
+
+@app.get("/api/reports/{record_id}/structured")
+async def download_structured_report(record_id: str):
+    """下载结构化分析报告 PDF。"""
+    record = get_upload_record(record_id)
+    if not record or not record.get("structured_pdf_path"):
+        raise HTTPException(status_code=404, detail="报告不存在")
+
+    pdf_path = Path(record["structured_pdf_path"])
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="报告文件已丢失")
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=f"{record_id}_structured_report.pdf",
+    )
+
+
+@app.get("/api/reports/{record_id}/original")
+async def download_original_text(record_id: str):
+    """下载原文 TXT。"""
+    record = get_upload_record(record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    original_path = DATA_DIR / "reports" / record_id / "original_text.txt"
+    if not original_path.exists():
+        # 兼容旧数据：从数据库内容生成
+        if not record.get("content"):
+            raise HTTPException(status_code=404, detail="原文不存在")
+        original_path.parent.mkdir(parents=True, exist_ok=True)
+        original_path.write_text(record["content"], encoding="utf-8")
+
+    return FileResponse(
+        original_path,
+        media_type="text/plain; charset=utf-8",
+        filename=f"{record_id}_original_text.txt",
     )

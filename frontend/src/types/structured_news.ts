@@ -59,6 +59,8 @@ export interface StructuredNewsItem {
   key_points: string[]
   relations: Relation[]
   processing: ProcessingMeta
+  report_pdf_path?: string
+  structured_pdf_path?: string
 }
 
 export interface StructuredNewsResponse {

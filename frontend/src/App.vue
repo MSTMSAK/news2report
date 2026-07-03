@@ -6,6 +6,15 @@
           <el-icon size="24"><TrendCharts /></el-icon>
           <h1>AI舆情分析日报系统</h1>
         </div>
+        <div class="header-actions">
+          <el-button
+            type="warning"
+            :icon="RefreshRight"
+            @click="triggerDailyReport"
+          >
+            重新生成日报
+          </el-button>
+        </div>
       </el-header>
 
       <el-main>
@@ -82,6 +91,9 @@
               <el-tab-pane label="📤 上传新文章" name="upload">
                 <UploadNews />
               </el-tab-pane>
+              <el-tab-pane label="📊 日报报告" name="daily-report">
+                <DailyReport ref="dailyReportRef" />
+              </el-tab-pane>
             </el-tabs>
           </el-col>
         </el-row>
@@ -92,13 +104,23 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { TrendCharts } from '@element-plus/icons-vue'
+import { TrendCharts, RefreshRight } from '@element-plus/icons-vue'
+import DailyReport from '@/components/DailyReport.vue'
 import NewsList from '@/components/NewsList.vue'
 import StructuredNewsList from '@/components/StructuredNewsList.vue'
 import UploadNews from '@/components/UploadNews.vue'
 
 const activeTab = ref('original')
 const modelName = ref('kimi-for-coding')
+const dailyReportRef = ref<InstanceType<typeof DailyReport> | null>(null)
+
+function triggerDailyReport() {
+  activeTab.value = 'daily-report'
+  // 等待 DOM 切换完成后调用子组件的重新生成方法
+  setTimeout(() => {
+    dailyReportRef.value?.fetchReport(true)
+  }, 0)
+}
 
 onMounted(async () => {
   try {
@@ -126,6 +148,16 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   font-size: 18px;
+}
+
+.app-header {
+  justify-content: space-between;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .welcome-card {

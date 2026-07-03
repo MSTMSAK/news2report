@@ -26,6 +26,56 @@
             {{ tag }}
           </el-tag>
         </div>
+        <div v-if="news.report_pdf_path || news.structured_pdf_path" class="report-actions">
+          <el-button
+            v-if="news.report_pdf_path"
+            type="primary"
+            size="small"
+            @click="openPreview('analysis')"
+          >
+            <el-icon><View /></el-icon>
+            预览 AI 分析报告
+          </el-button>
+          <el-button
+            v-if="news.structured_pdf_path"
+            type="info"
+            size="small"
+            @click="openPreview('structured')"
+          >
+            <el-icon><View /></el-icon>
+            预览结构化分析报告
+          </el-button>
+          <el-button
+            v-if="news.report_pdf_path"
+            type="primary"
+            size="small"
+            link
+            @click="downloadReport('analysis')"
+          >
+            <el-icon><Download /></el-icon>
+            下载
+          </el-button>
+          <el-button
+            v-if="news.structured_pdf_path"
+            type="info"
+            size="small"
+            link
+            @click="downloadReport('structured')"
+          >
+            <el-icon><Download /></el-icon>
+            下载
+          </el-button>
+          <el-divider direction="vertical" />
+          <el-button
+            type="primary"
+            size="small"
+            link
+            @click="downloadOriginal"
+          >
+            <el-icon><Document /></el-icon>
+            下载原文
+          </el-button>
+        </div>
       </div>
 
       <!-- 左右对比区域 -->
@@ -160,12 +210,30 @@
         </el-col>
       </el-row>
     </div>
+
+    <!-- PDF 预览弹窗 -->
+    <el-dialog
+      v-model="previewVisible"
+      :title="previewTitle"
+      width="80%"
+      top="5vh"
+      destroy-on-close
+    >
+      <div class="pdf-preview-wrapper">
+        <iframe
+          v-if="previewUrl"
+          :src="previewUrl"
+          class="pdf-iframe"
+          frameborder="0"
+        ></iframe>
+      </div>
+    </el-dialog>
   </el-drawer>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Document, Cpu, Link } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
+import { Document, Cpu, Link, View, Download } from '@element-plus/icons-vue'
 import type { StructuredNewsItem } from '@/types/structured_news'
 
 const props = defineProps<{
@@ -181,6 +249,27 @@ const visible = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
+
+const previewVisible = ref(false)
+const previewUrl = ref('')
+const previewTitle = ref('')
+
+const openPreview = (type: 'analysis' | 'structured') => {
+  if (!props.news) return
+  previewUrl.value = `/api/reports/${props.news.id}/${type}`
+  previewTitle.value = type === 'analysis' ? 'AI 分析报告' : '结构化分析报告'
+  previewVisible.value = true
+}
+
+const downloadReport = (type: 'analysis' | 'structured') => {
+  if (!props.news) return
+  window.open(`/api/reports/${props.news.id}/${type}`, '_blank')
+}
+
+const downloadOriginal = () => {
+  if (!props.news) return
+  window.open(`/api/reports/${props.news.id}/original`, '_blank')
+}
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return ''
@@ -236,6 +325,27 @@ const sentimentType = (sentiment: string) => {
 
 .header-tag {
   margin: 0;
+}
+
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.report-actions .el-button {
+  margin: 0;
+}
+
+.pdf-preview-wrapper {
+  width: 100%;
+  height: 70vh;
+}
+
+.pdf-iframe {
+  width: 100%;
+  height: 100%;
 }
 
 .detail-content {

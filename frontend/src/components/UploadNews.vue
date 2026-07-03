@@ -214,8 +214,31 @@
     <div v-if="result" class="result-section">
       <el-divider />
       <div class="result-title">
-        ✅ 分析完成
+        <span>✅ 分析完成</span>
         <el-tag type="success" size="small">{{ result.id }}</el-tag>
+        <el-button
+          v-if="result.structured?.report_pdf_path"
+          type="primary"
+          size="small"
+          @click="downloadReport('analysis')"
+        >
+          下载 AI 分析报告 PDF
+        </el-button>
+        <el-button
+          v-if="result.structured?.structured_pdf_path"
+          type="info"
+          size="small"
+          @click="downloadReport('structured')"
+        >
+          下载结构化分析报告 PDF
+        </el-button>
+        <el-button
+          type="primary"
+          size="small"
+          @click="downloadOriginal"
+        >
+          下载原文
+        </el-button>
       </div>
 
       <el-row :gutter="24" class="result-content">
@@ -429,6 +452,16 @@ const resetPdfForm = () => {
 const resetUrlForm = () => {
   urlFormRef.value?.resetFields()
   result.value = null
+}
+
+const downloadReport = (type: 'analysis' | 'structured') => {
+  if (!result.value?.id) return
+  window.open(`/api/reports/${result.value.id}/${type}`, '_blank')
+}
+
+const downloadOriginal = () => {
+  if (!result.value?.id) return
+  window.open(`/api/reports/${result.value.id}/original`, '_blank')
 }
 </script>
 
