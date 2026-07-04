@@ -379,4 +379,14 @@ npm run dev
 
 系统首页展示近期 AI 新闻列表，点击新闻卡片可查看 AI 结构化分析详情；点击右上角「日报报告」可进入日报页面。
 
+**首页新闻列表：**
+
 ![前端 UI 完整截图](./docs/screenshots/frontend-ui.png)
+
+**日报页面：**
+
+![日报界面截图](./docs/screenshots/daily-report-ui.png)
+
+**新闻详情页（点击卡片后从右侧滑出）：**
+
+![新闻详情页截图](./docs/screenshots/news-detail-ui.png)
