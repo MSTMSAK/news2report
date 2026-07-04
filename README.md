@@ -338,3 +338,45 @@ npm run dev
 - **前端**: Vue 3 + Vite + TypeScript + Element Plus + ECharts + marked
 - **AI**: OpenAI 兼容 API（支持 Kimi / OpenAI 等）
 - **文档输出**: Markdown + HTML + PDF（ReportLab）
+
+---
+
+## 7. API 接口与报告下载
+
+### 7.1 核心 API 接口
+
+| 接口 | 方法 | 说明 |
+|---|---|---|
+| `/api/health` | GET | 后端健康检查 |
+| `/api/news` | GET | 获取清洗后的原始新闻列表 |
+| `/api/structured-news` | GET | 获取 AI 结构化后的新闻列表 |
+| `/api/daily-report` | GET | 获取或生成 AI 领域日报 |
+| `/api/daily-report/generate` | POST | 强制重新生成日报 |
+| `/api/daily-report/pdf` | GET | 下载指定日期日报 PDF |
+| `/api/upload-news` | POST | 手动上传新闻文本并分析 |
+| `/api/upload-pdf` | POST | 上传 PDF 文件并分析 |
+| `/api/fetch-url` | POST | 抓取网页链接内容并分析 |
+
+### 7.2 日报下载链接
+
+- **在线查看日报**：`http://localhost:5173/daily-report`
+- **下载日报 PDF**：`http://localhost:8000/api/daily-report/pdf?date=YYYY-MM-DD`
+- **强制重新生成并下载**：先调用 `POST /api/daily-report/generate`，再访问 PDF 链接
+
+### 7.3 分析日报下载链接
+
+针对单条上传/抓取的文章，系统会生成两份 PDF 报告，可通过记录 ID 下载：
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/reports/{record_id}/analysis` | 下载该文章的 **AI 分析报告 PDF** |
+| `GET /api/reports/{record_id}/structured` | 下载该文章的 **结构化分析报告 PDF** |
+| `GET /api/reports/{record_id}/original` | 下载该文章的 **原始文本 TXT** |
+
+其中 `{record_id}` 对应新闻结构化数据中的 `id` 字段，例如 `news_20260703_001`。
+
+### 7.4 前端页面预览
+
+系统首页展示近期 AI 新闻列表，点击新闻卡片可查看 AI 结构化分析详情；点击右上角「日报报告」可进入日报页面。
+
+![前端 UI 完整截图](./docs/screenshots/frontend-ui.png)
